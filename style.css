@@ -360,12 +360,14 @@ img {
 
 .brand-crest {
   width: 26px;
-  height: 32px;
-  transition: transform var(--transition-fast);
+  height: 33px;
+  object-fit: contain;
+  transition: transform var(--transition-fast), filter var(--transition-fast);
 }
 
 .brand-logo:hover .brand-crest {
-  transform: scale(1.06);
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 10px rgba(237, 201, 94, 0.45));
 }
 
 .brand-text-group {
@@ -2440,13 +2442,21 @@ img {
 .footer-brand-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 18px;
 }
 
 .footer-crest {
-  width: 26px;
-  height: 32px;
+  width: 28px;
+  height: 35px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+}
+
+.footer-porsche-wordmark {
+  height: 16px;
+  width: auto;
+  object-fit: contain;
 }
 
 .footer-porsche {
@@ -2455,6 +2465,126 @@ img {
   font-size: 18px;
   letter-spacing: 0.32em;
   color: var(--text-primary);
+}
+
+/* ==================================================
+   PORSCHE BRAND HERITAGE & CREST SHOWCASE SECTION
+   ================================================== */
+.brand-heritage-showcase {
+  position: relative;
+  z-index: var(--z-content);
+  pointer-events: auto;
+  background-color: #050505;
+  background-image: radial-gradient(ellipse at 50% 60%, rgba(213, 0, 28, 0.14) 0%, rgba(5, 5, 5, 0.98) 75%);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 85px 24px 75px 24px;
+  overflow: hidden;
+  text-align: center;
+}
+
+.brand-heritage-showcase::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-guards-red), transparent);
+}
+
+.heritage-container {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+.heritage-emblem-wrap {
+  position: relative;
+  margin-bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emblem-halo {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(237, 201, 94, 0.25) 0%, rgba(213, 0, 28, 0.14) 40%, transparent 70%);
+  filter: blur(14px);
+  pointer-events: none;
+  animation: halo-pulse 4s ease-in-out infinite alternate;
+}
+
+@keyframes halo-pulse {
+  0% { transform: scale(0.92); opacity: 0.6; }
+  100% { transform: scale(1.18); opacity: 1; }
+}
+
+.heritage-crest-emblem {
+  width: 86px !important;
+  max-width: 86px !important;
+  height: 108px !important;
+  object-fit: contain;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 20px rgba(237, 201, 94, 0.35));
+  transition: transform var(--transition-med);
+}
+
+.heritage-emblem-wrap:hover .heritage-crest-emblem {
+  transform: scale(1.08) translateY(-4px);
+}
+
+.heritage-wordmark-wrap {
+  margin-bottom: 22px;
+  display: flex;
+  justify-content: center;
+}
+
+.heritage-wordmark {
+  width: 100% !important;
+  max-width: 380px !important;
+  height: auto !important;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.6));
+}
+
+.heritage-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.heritage-tagline {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: #FFFFFF;
+}
+
+.heritage-divider {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-guards-red);
+}
+
+.heritage-origin {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--text-secondary);
 }
 
 .footer-slogan {
