@@ -805,8 +805,20 @@
       this.currentPitch = 0;
       this.pointerStartX = 0;
       this.pointerStartY = 0;
+      this.pointerStartXOrigin = 0;
+      this.pointerStartYOrigin = 0;
       this.isPointerDown = false;
+      this.isHoveringCar = false;
+      this.hoveredHotspot = null;
       this.cameraLookAt = new THREE.Vector3(0, 0.45, 0);
+
+      // Raycasting & 3D Picking
+      this.raycaster = new THREE.Raycaster();
+      this.mouseNorm = new THREE.Vector2(-999, -999);
+      this.autoRotateResumeTimer = null;
+      this.cardActiveTimeout = null;
+      this.activePointers = new Map();
+      this.lastPinchDist = 0;
 
       this.init();
     }
@@ -933,16 +945,110 @@
 
     bindEvents() {
       const el = this.container;
+      const heroEl = document.getElementById('hero');
 
-      // Pointer Drag Interaction
-      el.addEventListener('pointerdown', (e) => {
-        this.isPointerDown = true;
-        this.pointerStartX = e.clientX;
-        this.pointerStartY = e.clientY;
-        STATE.isInteracting = true;
-      });
+      const handlePointerDown = (e) => {
+        // If clicked on an interactive UI control, don't start 3D drag
+        if (e.target.closest('button, a, input, select, .color-swatch, .hotspot-item, .tech-annotation, .spec-pill, .hero-tech-bar, .desktop-nav, .mobile-drawer')) {
+          return;
+        }
+
+        this.activePointers.set(e.pointerId, e);
+        if (this.activePointers.size === 1) {
+          this.isPointerDown = true;
+          this.pointerStartX = e.clientX;
+          this.pointerStartY = e.clientY;
+          this.pointerStartXOrigin = e.clientX;
+          this.pointerStartYOrigin = e.clientY;
+          STATE.isInteracting = true;
+
+          document.body.classList.add('is-dragging-3d');
+          const ring = document.getElementById('cursor-follower');
+          if (ring) {
+            ring.classList.add('is-dragging');
+            const lbl = ring.querySelector('.cursor-label');
+            if (lbl) lbl.textContent = 'ROTATING';
+          }
+
+          if (this.autoRotateResumeTimer) clearTimeout(this.autoRotateResumeTimer);
+        } else if (this.activePointers.size === 2) {
+          const [p1, p2] = Array.from(this.activePointers.values());
+          this.lastPinchDist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+        }
+      };
+
+      if (el) el.addEventListener('pointerdown', handlePointerDown);
+      if (heroEl) heroEl.addEventListener('pointerdown', handlePointerDown);
 
       window.addEventListener('pointermove', (e) => {
+        if (this.activePointers.has(e.pointerId)) {
+          this.activePointers.set(e.pointerId, e);
+        }
+
+        // Multi-touch pinch zoom
+        if (this.activePointers.size === 2) {
+          const [p1, p2] = Array.from(this.activePointers.values());
+          const dist = Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+          if (this.lastPinchDist) {
+            const pinchDelta = (this.lastPinchDist - dist) * 0.008;
+            this.zoomCamera(pinchDelta);
+          }
+          this.lastPinchDist = dist;
+          return;
+        }
+
+        // Raycasting on 3D car in hero section
+        this.mouseNorm.x = (e.clientX / window.innerWidth) * 2 - 1;
+        this.mouseNorm.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        if (window.scrollY < window.innerHeight * 0.85 && this.camera && this.carBuilder && this.carBuilder.group) {
+          this.raycaster.setFromCamera(this.mouseNorm, this.camera);
+          const intersects = this.raycaster.intersectObjects(this.carBuilder.group.children, true);
+
+          if (intersects.length > 0) {
+            this.isHoveringCar = true;
+            document.body.classList.add('cursor-over-car');
+            const ring = document.getElementById('cursor-follower');
+            if (ring) ring.classList.add('over-car');
+
+            // Find nearest hotspot to cursor
+            const hitPoint = intersects[0].point;
+            let closestH = null;
+            let minDist = Infinity;
+            CONFIG.hotspots.forEach((h) => {
+              const hWorld = h.pos.clone().applyMatrix4(this.carBuilder.group.matrixWorld);
+              const d = hWorld.distanceTo(hitPoint);
+              if (d < minDist) {
+                minDist = d;
+                closestH = h;
+              }
+            });
+
+            this.hoveredHotspot = minDist < 1.6 ? closestH : null;
+
+            const cursorLabel = document.querySelector('.cursor-label');
+            if (cursorLabel && !this.isPointerDown) {
+              if (this.hoveredHotspot) {
+                cursorLabel.textContent = `INSPECT ${this.hoveredHotspot.name}`;
+              } else {
+                cursorLabel.textContent = `CLICK TO INSPECT • DRAG ROTATE`;
+              }
+            }
+          } else {
+            this.isHoveringCar = false;
+            this.hoveredHotspot = null;
+            document.body.classList.remove('cursor-over-car');
+            const ring = document.getElementById('cursor-follower');
+            if (ring) ring.classList.remove('over-car');
+
+            const cursorLabel = document.querySelector('.cursor-label');
+            if (cursorLabel && !this.isPointerDown) {
+              cursorLabel.textContent = `DRAG TO ROTATE`;
+            }
+          }
+        }
+
+        // Pointer Drag calculation
         if (!this.isPointerDown) return;
         const deltaX = e.clientX - this.pointerStartX;
         const deltaY = e.clientY - this.pointerStartY;
@@ -953,22 +1059,153 @@
         this.targetPitch = Math.max(-0.25, Math.min(0.35, this.targetPitch + deltaY * 0.003));
       });
 
-      window.addEventListener('pointerup', () => {
-        this.isPointerDown = false;
-        STATE.isInteracting = false;
-      });
+      const handlePointerUp = (e) => {
+        this.activePointers.delete(e.pointerId);
 
-      // NATURAL SCROLLING: Do NOT call e.preventDefault() on regular wheel!
-      // Only zoom 3D camera if Ctrl or Shift is held:
-      el.addEventListener('wheel', (e) => {
+        if (this.isPointerDown) {
+          const dragDist = Math.hypot(e.clientX - this.pointerStartXOrigin, e.clientY - this.pointerStartYOrigin);
+          // Detect click on 3D model (movement under 6px)
+          if (dragDist < 6 && (this.isHoveringCar || (e.target && e.target.closest('#canvas-container, #hero')))) {
+            this.onCarModelClicked(e);
+          }
+        }
+
+        if (this.activePointers.size === 0) {
+          this.isPointerDown = false;
+          STATE.isInteracting = false;
+          document.body.classList.remove('is-dragging-3d');
+          const ring = document.getElementById('cursor-follower');
+          if (ring) {
+            ring.classList.remove('is-dragging');
+            const lbl = ring.querySelector('.cursor-label');
+            if (lbl) lbl.textContent = this.isHoveringCar ? 'CLICK TO INSPECT • DRAG ROTATE' : 'DRAG TO ROTATE';
+          }
+
+          // Resume auto-rotation after 4.5 seconds of idle
+          if (STATE.autoRotatePref !== false) {
+            if (this.autoRotateResumeTimer) clearTimeout(this.autoRotateResumeTimer);
+            this.autoRotateResumeTimer = setTimeout(() => {
+              if (!this.isPointerDown && window.scrollY < window.innerHeight * 0.7) {
+                STATE.autoRotate = true;
+                const autoBtn = document.getElementById('auto-rotate-btn');
+                if (autoBtn) autoBtn.classList.add('active');
+              }
+            }, 4500);
+          }
+        }
+      };
+
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+
+      // Wheel Zoom: Support Ctrl/Shift wheel OR direct zoom when hovering over 3D car in Hero
+      const handleWheel = (e) => {
         if (e.ctrlKey || e.shiftKey) {
           e.preventDefault();
           const zoomDelta = e.deltaY * 0.0025;
           this.zoomCamera(zoomDelta);
+          return;
         }
-      }, { passive: false });
+
+        // If hovering over the 3D car in hero, allow zoom
+        if (this.isHoveringCar && window.scrollY < 120) {
+          const dist = this.camera ? this.camera.position.distanceTo(this.cameraLookAt) : 4.5;
+          // Zoom in, or zoom out while closer than default 5.2
+          if (e.deltaY < 0 || dist < 5.2) {
+            e.preventDefault();
+            const zoomDelta = e.deltaY * 0.002;
+            this.zoomCamera(zoomDelta);
+          }
+        }
+      };
+
+      if (el) el.addEventListener('wheel', handleWheel, { passive: false });
+      if (heroEl) heroEl.addEventListener('wheel', handleWheel, { passive: false });
 
       window.addEventListener('resize', () => this.onResize());
+    }
+
+    onCarModelClicked(e) {
+      if (!this.camera || !this.carBuilder || !this.carBuilder.group) return;
+
+      this.mouseNorm.x = (e.clientX / window.innerWidth) * 2 - 1;
+      this.mouseNorm.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      this.raycaster.setFromCamera(this.mouseNorm, this.camera);
+      const intersects = this.raycaster.intersectObjects(this.carBuilder.group.children, true);
+      if (intersects.length === 0) return;
+
+      const hit = intersects[0];
+      const hitPoint = hit.point;
+
+      // Spawn 3D holographic ripple effect at clicked point
+      this.spawnClickRipple(hitPoint);
+
+      // Find closest hotspot to hitPoint
+      let closestH = null;
+      let minDist = Infinity;
+      CONFIG.hotspots.forEach((h) => {
+        const hWorld = h.pos.clone().applyMatrix4(this.carBuilder.group.matrixWorld);
+        const d = hWorld.distanceTo(hitPoint);
+        if (d < minDist) {
+          minDist = d;
+          closestH = h;
+        }
+      });
+
+      if (closestH) {
+        this.focusHotspot(closestH.id);
+        const cardEl = document.querySelector(`.hotspot-item[data-hotspot="${closestH.id}"]`);
+        if (cardEl) {
+          document.querySelectorAll('.hotspot-item').forEach((item) => item.classList.remove('active'));
+          cardEl.classList.add('active');
+          if (this.cardActiveTimeout) clearTimeout(this.cardActiveTimeout);
+          this.cardActiveTimeout = setTimeout(() => {
+            cardEl.classList.remove('active');
+          }, 4500);
+        }
+
+        // Component specific actions
+        if (closestH.id === 'aero') {
+          const drsBtn = document.getElementById('drs-trigger-btn');
+          if (drsBtn) drsBtn.click();
+        } else if (closestH.id === 'engine') {
+          const revBtn = document.getElementById('hero-sound-rev');
+          if (revBtn) revBtn.click();
+        }
+      }
+    }
+
+    spawnClickRipple(point) {
+      if (!this.scene) return;
+      const ringGeo = new THREE.RingGeometry(0.04, 0.08, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xD5001C,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.95
+      });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.position.copy(point);
+      if (this.camera) ringMesh.quaternion.copy(this.camera.quaternion);
+      this.scene.add(ringMesh);
+
+      gsap.to(ringMesh.scale, {
+        x: 7,
+        y: 7,
+        z: 7,
+        duration: 0.6,
+        ease: 'power2.out'
+      });
+      gsap.to(ringMat, {
+        opacity: 0,
+        duration: 0.6,
+        ease: 'power2.out',
+        onComplete: () => {
+          this.scene.remove(ringMesh);
+          ringGeo.dispose();
+          ringMat.dispose();
+        }
+      });
     }
 
     zoomCamera(delta) {
@@ -1165,10 +1402,41 @@
       renderCursor();
 
       const canvasEl = document.getElementById('canvas-container');
-      canvasEl.addEventListener('mouseenter', () => ring.classList.add('active-3d'));
-      canvasEl.addEventListener('mouseleave', () => ring.classList.remove('active-3d'));
+      const heroEl = document.getElementById('hero');
 
-      const interactives = document.querySelectorAll('button, a, .color-swatch, .exp-tab, .hotspot-pin');
+      const enter3D = () => ring.classList.add('active-3d');
+      const leave3D = (e) => {
+        if (e && e.relatedTarget && (e.relatedTarget.closest('#canvas-container') || e.relatedTarget.closest('#hero'))) {
+          return;
+        }
+        if (window.scrollY > window.innerHeight * 0.8) {
+          ring.classList.remove('active-3d');
+        }
+      };
+
+      if (canvasEl) {
+        canvasEl.addEventListener('mouseenter', enter3D);
+        canvasEl.addEventListener('mouseleave', leave3D);
+      }
+      if (heroEl) {
+        heroEl.addEventListener('mouseenter', enter3D);
+        heroEl.addEventListener('mouseleave', leave3D);
+      }
+
+      window.addEventListener('scroll', () => {
+        if (window.scrollY < window.innerHeight * 0.8) {
+          ring.classList.add('active-3d');
+        } else {
+          ring.classList.remove('active-3d');
+        }
+      }, { passive: true });
+
+      // Initialize cursor state if loaded in hero
+      if (window.scrollY < window.innerHeight * 0.8) {
+        ring.classList.add('active-3d');
+      }
+
+      const interactives = document.querySelectorAll('button, a, .color-swatch, .exp-tab, .hotspot-pin, .tech-annotation');
       interactives.forEach((item) => {
         item.addEventListener('mouseenter', () => ring.classList.add('hover-interactive'));
         item.addEventListener('mouseleave', () => ring.classList.remove('hover-interactive'));
