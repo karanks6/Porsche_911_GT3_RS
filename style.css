@@ -1066,7 +1066,6 @@ body.is-dragging-3d {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
 }
 
-.grid-line.horizontal-top { top: 104px; }
 .grid-line.horizontal-bottom { bottom: 80px; }
 
 /* Hero Content */
