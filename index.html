@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body class="loading-state">
 
@@ -509,21 +509,27 @@
 
             <!-- SVG Gauge Dial -->
             <svg class="tacho-svg" viewBox="0 0 300 300">
-              <circle class="tacho-track" cx="150" cy="150" r="115" />
-              <circle class="tacho-redline-zone" cx="150" cy="150" r="115" />
-              <circle class="tacho-value-bar" id="tacho-bar" cx="150" cy="150" r="115" />
+              <path class="tacho-track" d="M 68.68 231.32 A 115 115 0 1 1 231.32 231.32" pathLength="1000" />
+              <path class="tacho-redline-zone" d="M 68.68 231.32 A 115 115 0 1 1 231.32 231.32" pathLength="1000" />
+              <path class="tacho-value-bar" id="tacho-bar" d="M 68.68 231.32 A 115 115 0 1 1 231.32 231.32" pathLength="1000" />
             </svg>
 
             <div class="tacho-readout">
-              <span class="tacho-gear" id="live-gear">N</span>
+              <div class="tacho-gear-badge">
+                <span class="tacho-gear-pdk">PDK</span>
+                <span class="tacho-gear" id="live-gear">N</span>
+              </div>
               <span class="tacho-rpm-num" id="live-rpm">850</span>
-              <span class="tacho-rpm-unit">RPM x 1000</span>
-              <span class="tacho-redline-tag">REDLINE 9000</span>
+              <span class="tacho-rpm-unit">RPM</span>
+              <div class="tacho-meta-row">
+                <span class="tacho-speed" id="live-speed">0 KM/H</span>
+                <span class="tacho-meta-sep">•</span>
+                <span class="tacho-redline-tag">REDLINE 9000</span>
+              </div>
             </div>
 
             <!-- Interactive Rev Throttle Button -->
-            <button id="tacho-rev-btn" class="btn-rev-throttle" aria-label="Rev Throttle">
-              <span class="btn-pulse-ring"></span>
+            <button id="tacho-rev-btn" class="btn-rev-throttle" aria-label="Hold Throttle to Accelerate through 7-Speed PDK">
               <span>HOLD THROTTLE</span>
             </button>
 
@@ -1255,7 +1261,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 
   <!-- Main Application Script -->
-  <script src="script.js"></script>
+  <script src="script.js?v=9"></script>
 
 </body>
 </html>

@@ -1618,17 +1618,17 @@ body.is-dragging-3d {
 /* Central SVG Tachometer */
 .tacho-dial-container {
   position: relative;
-  width: 280px;
-  height: 280px;
+  width: 290px;
+  height: 326px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .shift-lights {
   position: absolute;
-  top: 18px;
+  top: 14px;
   display: flex;
   gap: 6px;
   z-index: 5;
@@ -1654,39 +1654,42 @@ body.is-dragging-3d {
 
 .tacho-svg {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
-  transform: rotate(-135deg);
+  height: 270px;
 }
 
 .tacho-track {
   fill: none;
   stroke: rgba(255, 255, 255, 0.08);
   stroke-width: 12;
-  stroke-dasharray: 540;
-  stroke-dashoffset: 135;
+  stroke-linecap: round;
 }
 
 .tacho-redline-zone {
   fill: none;
-  stroke: rgba(213, 0, 28, 0.2);
+  stroke: rgba(213, 0, 28, 0.35);
   stroke-width: 12;
-  stroke-dasharray: 540;
-  stroke-dashoffset: 440;
+  stroke-linecap: round;
+  stroke-dasharray: 89 1000;
+  stroke-dashoffset: -911;
 }
 
 .tacho-value-bar {
   fill: none;
   stroke: var(--color-guards-red);
   stroke-width: 12;
-  stroke-dasharray: 540;
-  stroke-dashoffset: 540; /* Animated in JS */
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.08s linear;
+  stroke-dasharray: 94 1000;
+  stroke-dashoffset: 0;
+  transition: stroke-dasharray 0.06s linear;
 }
 
 .tacho-readout {
+  position: absolute;
+  top: 135px;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1694,12 +1697,33 @@ body.is-dragging-3d {
   z-index: 4;
 }
 
+.tacho-gear-badge {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.tacho-gear-pdk {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+}
+
 .tacho-gear {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 22px;
+  font-size: 24px;
   color: var(--color-guards-red);
   line-height: 1;
+  transition: transform 0.08s ease, color 0.08s ease;
+}
+
+.tacho-gear.shift-pulse {
+  transform: scale(1.35);
+  color: #FFFFFF;
+  text-shadow: 0 0 14px var(--color-guards-red);
 }
 
 .tacho-rpm-num {
@@ -1714,7 +1738,27 @@ body.is-dragging-3d {
 .tacho-rpm-unit {
   font-family: var(--font-mono);
   font-size: 9px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+}
+
+.tacho-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tacho-speed {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.06em;
+}
+
+.tacho-meta-sep {
+  font-size: 8px;
   color: var(--text-muted);
 }
 
@@ -1723,14 +1767,13 @@ body.is-dragging-3d {
   font-size: 8px;
   color: var(--color-guards-red);
   letter-spacing: 0.1em;
-  margin-top: 2px;
 }
 
 .btn-rev-throttle {
   position: absolute;
-  bottom: 0px;
-  padding: 8px 18px;
-  background: rgba(213, 0, 28, 0.2);
+  bottom: 4px;
+  padding: 9px 20px;
+  background: rgba(213, 0, 28, 0.18);
   border: 1px solid var(--border-red);
   border-radius: 2px;
   font-family: var(--font-mono);
@@ -1753,7 +1796,7 @@ body.is-dragging-3d {
 .btn-rev-throttle.holding, .btn-rev-throttle:active {
   background: #FF0028 !important;
   box-shadow: 0 0 28px var(--color-red-glow), 0 0 10px rgba(255, 255, 255, 0.5) !important;
-  transform: scale(1.05);
+  transform: scale(1.04);
 }
 
 /* ==================================================

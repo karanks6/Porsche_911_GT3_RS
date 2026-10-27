@@ -87,16 +87,31 @@
   };
 
   /* --------------------------------------------------------------------------
-   * 2. ACCURATE PORSCHE 911 GT3 RS FLAT-SIX SOUND SYNTHESIZER
-   * High-Precision Boxer Harmonics, Titanium Exhaust Resonator, Pops & Crackles
+   * 2. ACCURATE PORSCHE 911 GT3 RS FLAT-SIX SOUND SYNTHESIZER & 7-SPEED PDK
+   * 4.0L Naturally Aspirated Flat-Six, 9,000 RPM Redline, 7-Speed Dual-Clutch (PDK)
    * -------------------------------------------------------------------------- */
+  const PDK_GEARS = [
+    { gear: 1, startRpm: 850,  minSpeed: 0,   maxSpeed: 72,  pullRate: 8800 },
+    { gear: 2, startRpm: 5900, minSpeed: 72,  maxSpeed: 114, pullRate: 7200 },
+    { gear: 3, startRpm: 6500, minSpeed: 114, maxSpeed: 158, pullRate: 5800 },
+    { gear: 4, startRpm: 7100, minSpeed: 158, maxSpeed: 202, pullRate: 4600 },
+    { gear: 5, startRpm: 7500, minSpeed: 202, maxSpeed: 244, pullRate: 3600 },
+    { gear: 6, startRpm: 7900, minSpeed: 244, maxSpeed: 282, pullRate: 2800 },
+    { gear: 7, startRpm: 8200, minSpeed: 282, maxSpeed: 296, pullRate: 2200 }
+  ];
+
   class SoundSynthesizer {
     constructor() {
       this.ctx = null;
       this.isPlaying = false;
       this.currentRpm = 850;
       this.targetRpm = 850;
+      this.currentGear = 'N';
+      this.currentSpeed = 0; // km/h
+      this.pdkRatioIndex = 0;
       this.isHoldingThrottle = false;
+      this.isShifting = false;
+      this.onShift = null;
       this.oscillators = [];
       this.masterGain = null;
       this.engineGain = null;
@@ -104,8 +119,10 @@
       this.exhaustFilter = null;
       this.lowpassFilter = null;
       this.distortionNode = null;
-      this.limiterBounceInterval = null;
       this.lastRpm = 850;
+
+      // Start vehicle dynamics & transmission physics loop immediately
+      this.startEngineLoop();
     }
 
     init() {
@@ -181,7 +198,6 @@
       });
 
       this.isPlaying = true;
-      this.startEngineLoop();
     }
 
     makeDistortionCurve(amount) {
@@ -232,23 +248,24 @@
       this.masterGain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + duration);
     }
 
-    setRpm(rpm, duration = 0.15) {
-      this.targetRpm = Math.max(850, Math.min(rpm, 9100));
-      if (!this.ctx) return;
-
-      const baseFreq = (this.targetRpm / 60) * 3.0; // 3 firing pulses per crankshaft rev
+    updateAudioParams(rpm = this.currentRpm, duration = 0.05) {
+      if (!this.ctx || !this.isPlaying || this.oscillators.length === 0) return;
+      const baseFreq = (rpm / 60) * 3.0;
       const now = this.ctx.currentTime;
 
       this.oscillators.forEach(({ osc, ratio, oscGain, baseGain }) => {
-        osc.frequency.exponentialRampToValueAtTime(Math.max(15, baseFreq * ratio), now + duration);
-        // High harmonics get louder at high RPM
-        const rpmFactor = Math.pow(this.targetRpm / 9000, 1.2);
-        oscGain.gain.linearRampToValueAtTime(baseGain * (0.6 + rpmFactor * 0.8), now + duration);
+        osc.frequency.setValueAtTime(Math.max(15, baseFreq * ratio), now);
+        const rpmFactor = Math.pow(Math.min(9050, rpm) / 9000, 1.2);
+        oscGain.gain.setValueAtTime(baseGain * (0.6 + rpmFactor * 0.8), now);
       });
 
-      // Filter opens wide to let out raw flat-6 scream
-      const filterCutoff = 1000 + (this.targetRpm / 9000) * 7200;
-      this.lowpassFilter.frequency.exponentialRampToValueAtTime(filterCutoff, now + duration);
+      const filterCutoff = 1000 + (Math.min(9050, rpm) / 9000) * 7200;
+      this.lowpassFilter.frequency.setValueAtTime(filterCutoff, now);
+    }
+
+    setRpm(rpm, duration = 0.15) {
+      this.targetRpm = Math.max(850, Math.min(rpm, 9100));
+      this.updateAudioParams(this.targetRpm, duration);
     }
 
     playExhaustPop() {
@@ -277,15 +294,20 @@
       noise.start();
     }
 
+    // Stationary rev in Neutral (e.g. REV FLAT-6 button)
     revEngine(targetRpm = 8900, revDuration = 1.3) {
       if (!this.ctx) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
+      this.currentGear = 'N';
+      this.currentSpeed = 0;
+      if (this.onShift) this.onShift('N');
+
       this.setVolume(0.28, 0.1);
-      this.setRpm(targetRpm, 0.45);
+      this.targetRpm = targetRpm;
 
       setTimeout(() => {
-        this.setRpm(850, revDuration);
+        this.targetRpm = 850;
         // Overrun pops on drop
         setTimeout(() => this.playExhaustPop(), 250);
         setTimeout(() => this.playExhaustPop(), 420);
@@ -299,29 +321,26 @@
       }, 500);
     }
 
+    // Interactive Full-Throttle Acceleration Run through 7-Speed PDK
     holdThrottle(isHolding) {
       this.isHoldingThrottle = isHolding;
       if (!this.ctx) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
       if (isHolding) {
-        this.setVolume(0.30, 0.1);
-        this.setRpm(9000, 0.6);
+        this.setVolume(0.32, 0.08);
 
-        // Rev limiter bounce simulation
-        clearInterval(this.limiterBounceInterval);
-        this.limiterBounceInterval = setInterval(() => {
-          if (!this.isHoldingThrottle) return;
-          if (this.currentRpm >= 8800) {
-            // Cut spark/fuel at redline (rapid 18Hz stutter)
-            const bounceRpm = 8850 + Math.random() * 200;
-            this.setRpm(bounceRpm, 0.05);
-            if (Math.random() > 0.4) this.playExhaustPop();
-          }
-        }, 55);
+        // If in Neutral, engage 1st gear
+        if (this.currentGear === 'N') {
+          this.currentGear = '1';
+          this.pdkRatioIndex = 0;
+          if (this.onShift) this.onShift('1');
+        }
       } else {
-        clearInterval(this.limiterBounceInterval);
-        this.setRpm(850, 1.2);
+        // Throttle released: begin smooth return to idle
+        this.targetRpm = 850;
+        this.isShifting = false;
+
         // Overrun deceleration crackles
         setTimeout(() => this.playExhaustPop(), 180);
         setTimeout(() => this.playExhaustPop(), 360);
@@ -334,20 +353,117 @@
     }
 
     startEngineLoop() {
-      const update = () => {
-        // Continuous smooth RPM inertia
-        const step = (this.targetRpm - this.currentRpm) * 0.12;
+      let lastTime = performance.now();
+
+      const update = (now) => {
+        const dt = Math.min((now - lastTime) / 1000, 0.08);
+        lastTime = now;
+
+        if (this.isHoldingThrottle) {
+          // Engage 1st gear if currently in Neutral
+          if (this.currentGear === 'N') {
+            this.currentGear = '1';
+            this.pdkRatioIndex = 0;
+            if (this.onShift) this.onShift('1');
+          }
+
+          if (!this.isShifting) {
+            const currentGearData = PDK_GEARS[this.pdkRatioIndex];
+
+            // Target RPM advances towards 9,000 RPM
+            this.targetRpm = Math.min(9050, this.targetRpm + currentGearData.pullRate * dt);
+
+            // Compute vehicle road speed based on PDK gear ratio
+            const rpmFraction = Math.max(0, Math.min(1, (this.currentRpm - currentGearData.startRpm) / (9000 - currentGearData.startRpm)));
+            this.currentSpeed = Math.round(currentGearData.minSpeed + rpmFraction * (currentGearData.maxSpeed - currentGearData.minSpeed));
+
+            // Check for PDK Upshift at 8,920+ RPM
+            if (this.currentRpm >= 8920 && this.pdkRatioIndex < PDK_GEARS.length - 1) {
+              this.isShifting = true;
+
+              // Dual-clutch lightning upshift sound crackle (<100ms)
+              this.playExhaustPop();
+              setTimeout(() => this.playExhaustPop(), 35);
+
+              // Advance to next gear
+              this.pdkRatioIndex++;
+              const nextGearData = PDK_GEARS[this.pdkRatioIndex];
+              this.currentGear = String(nextGearData.gear);
+              if (this.onShift) this.onShift(this.currentGear);
+
+              // Instant drop to next gear engagement RPM
+              this.currentRpm = nextGearData.startRpm;
+              this.targetRpm = nextGearData.startRpm;
+              this.updateAudioParams(nextGearData.startRpm, 0.04);
+
+              setTimeout(() => {
+                this.isShifting = false;
+              }, 60);
+            } else if (this.pdkRatioIndex === PDK_GEARS.length - 1 && this.currentRpm >= 8920) {
+              // Gear 7 at 9,000 RPM: Top Track Speed 296 km/h reached!
+              this.currentSpeed = 296;
+              // Rev limiter bounce simulation
+              if (Math.random() < 0.28) {
+                const bounce = 8870 + Math.random() * 160;
+                this.targetRpm = bounce;
+                this.currentRpm = bounce;
+                this.updateAudioParams(bounce, 0.04);
+                if (Math.random() > 0.45) this.playExhaustPop();
+              }
+            }
+          }
+        } else {
+          // THROTTLE RELEASED: Engine Braking & Sequential Downshift
+          this.targetRpm = 850;
+          this.isShifting = false;
+
+          if (this.currentSpeed > 0) {
+            this.currentSpeed = Math.max(0, this.currentSpeed - 75 * dt);
+          }
+
+          if (this.currentGear !== 'N') {
+            if (this.currentSpeed <= 4 || this.currentRpm <= 1200) {
+              this.currentGear = 'N';
+              this.pdkRatioIndex = 0;
+              this.currentSpeed = 0;
+              if (this.onShift) this.onShift('N');
+            } else {
+              // Match gear to decelerating speed
+              let targetIndex = 0;
+              for (let i = 0; i < PDK_GEARS.length; i++) {
+                if (this.currentSpeed <= PDK_GEARS[i].maxSpeed) {
+                  targetIndex = i;
+                  break;
+                }
+              }
+              if (targetIndex < this.pdkRatioIndex) {
+                this.pdkRatioIndex = targetIndex;
+                this.currentGear = String(PDK_GEARS[this.pdkRatioIndex].gear);
+                this.playExhaustPop(); // Downshift throttle blip
+                if (this.onShift) this.onShift(this.currentGear);
+              }
+            }
+          }
+        }
+
+        // Smooth physical RPM inertia towards target
+        const inertia = this.isHoldingThrottle ? 0.22 : 0.08;
+        const step = (this.targetRpm - this.currentRpm) * inertia;
         this.currentRpm += step;
 
+        // Continuous audio updates
+        this.updateAudioParams(this.currentRpm, 0.06);
+
         // Detect rapid deceleration for overrun pops
-        if (this.lastRpm - this.currentRpm > 180 && this.currentRpm > 3500 && Math.random() > 0.8) {
+        if (this.lastRpm - this.currentRpm > 180 && this.currentRpm > 3200 && Math.random() > 0.82) {
           this.playExhaustPop();
         }
         this.lastRpm = this.currentRpm;
 
         requestAnimationFrame(update);
       };
-      update();
+
+      requestAnimationFrame(update);
     }
   }
 
@@ -1634,41 +1750,47 @@
       const revBtn = document.getElementById('tacho-rev-btn');
       const rpmDisplay = document.getElementById('live-rpm');
       const gearDisplay = document.getElementById('live-gear');
+      const speedDisplay = document.getElementById('live-speed');
       const tachoBar = document.getElementById('tacho-bar');
       const leds = document.querySelectorAll('.shift-led');
 
-      const updateTachoVisuals = (rpm) => {
-        if (rpmDisplay) rpmDisplay.textContent = Math.round(rpm);
-
-        const pct = Math.max(0, Math.min(1, (rpm - 850) / (9000 - 850)));
-        const offset = 540 - pct * 360;
-        if (tachoBar) tachoBar.style.strokeDashoffset = offset;
-
-        // Shift LEDs
-        leds.forEach((led, idx) => {
-          const threshold = 3800 + idx * 980;
-          led.classList.toggle('active', rpm >= threshold);
-        });
-
-        // Dynamic gear indicator
+      // Visual pulse effect on PDK gear change
+      soundEngine.onShift = () => {
         if (gearDisplay) {
-          if (rpm < 1200) gearDisplay.textContent = 'N';
-          else if (rpm < 4500) gearDisplay.textContent = '1';
-          else if (rpm < 7000) gearDisplay.textContent = '2';
-          else gearDisplay.textContent = '3';
+          gearDisplay.classList.add('shift-pulse');
+          setTimeout(() => gearDisplay.classList.remove('shift-pulse'), 140);
         }
       };
 
-      // Real-time animation loop for live tachometer
+      const updateTachoVisuals = (rpm, gear, speed) => {
+        if (rpmDisplay) rpmDisplay.textContent = Math.round(rpm);
+        if (gearDisplay) gearDisplay.textContent = gear;
+        if (speedDisplay) speedDisplay.textContent = `${Math.round(speed)} KM/H`;
+
+        // Scale: 0 to 9,000 RPM maps to 0..1000 units over pathLength="1000"
+        const pct = Math.max(0, Math.min(1, rpm / 9000));
+        const visibleLength = pct * 1000;
+        if (tachoBar) {
+          tachoBar.style.strokeDasharray = `${visibleLength.toFixed(1)} 1000`;
+        }
+
+        // Shift LEDs: 6 LEDs mapped across Flat-6 power band up to 9,000 RPM redline
+        const thresholds = [4000, 5200, 6400, 7500, 8400, 8800];
+        leds.forEach((led, idx) => {
+          led.classList.toggle('active', rpm >= thresholds[idx]);
+        });
+      };
+
+      // Real-time animation loop for live tachometer & transmission
       const liveLoop = () => {
-        updateTachoVisuals(soundEngine.currentRpm);
+        updateTachoVisuals(soundEngine.currentRpm, soundEngine.currentGear, soundEngine.currentSpeed);
         requestAnimationFrame(liveLoop);
       };
       liveLoop();
 
-      // Support BOTH Click and Press & Hold
+      // Support BOTH Click and Press & Hold for throttle acceleration
       if (revBtn) {
-        // Pointer down: Rev up & hold
+        // Pointer down: Rev up & hold through PDK gears
         const pressHandler = (e) => {
           e.preventDefault();
           soundEngine.holdThrottle(true);
