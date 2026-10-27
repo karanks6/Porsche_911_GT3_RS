@@ -35,7 +35,7 @@
   --transition-med: 0.35s var(--ease-out-expo);
   --transition-slow: 0.6s var(--ease-out-expo);
 
-  --header-height: 76px;
+  --header-height: 64px;
   --z-canvas: 1;
   --z-hotspots: 10;
   --z-content: 20;
@@ -356,13 +356,15 @@ body.is-dragging-3d {
   width: 100%;
   height: var(--header-height);
   z-index: var(--z-header);
-  background: transparent;
-  transition: background-color var(--transition-med), backdrop-filter var(--transition-med), border-color var(--transition-med);
-  border-bottom: 1px solid transparent;
+  background: rgba(5, 5, 5, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color var(--transition-med), border-color var(--transition-med);
 }
 
 .site-header.scrolled {
-  background: rgba(5, 5, 5, 0.88);
+  background: rgba(5, 5, 5, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-subtle);
@@ -1051,8 +1053,8 @@ body.is-dragging-3d {
   position: absolute;
 }
 
-.grid-crosshair.top-left { top: 96px; left: 36px; }
-.grid-crosshair.top-right { top: 96px; right: 36px; }
+.grid-crosshair.top-left { top: 80px; left: 36px; }
+.grid-crosshair.top-right { top: 80px; right: 36px; }
 .grid-crosshair.bottom-left { bottom: 90px; left: 36px; }
 .grid-crosshair.bottom-right { bottom: 90px; right: 36px; color: var(--color-guards-red); }
 
@@ -1064,7 +1066,7 @@ body.is-dragging-3d {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
 }
 
-.grid-line.horizontal-top { top: 120px; }
+.grid-line.horizontal-top { top: 104px; }
 .grid-line.horizontal-bottom { bottom: 80px; }
 
 /* Hero Content */
@@ -1073,7 +1075,7 @@ body.is-dragging-3d {
   max-width: 1680px;
   width: 100%;
   margin: 0 auto;
-  padding: 100px 36px 0 36px;
+  padding: 88px 36px 0 36px;
   pointer-events: none; /* Allows direct pointer drag & clicks to reach the 3D car */
   z-index: 5;
 }
@@ -2732,7 +2734,7 @@ body.is-dragging-3d {
     padding: 0 20px;
   }
   .hero-content {
-    padding: 100px 20px 0 20px;
+    padding: 80px 20px 0 20px;
   }
   .hero-tech-bar {
     padding: 12px 20px 20px 20px;
