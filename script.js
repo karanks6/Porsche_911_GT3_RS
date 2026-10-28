@@ -119,37 +119,12 @@
       this.exhaustFilter = null;
       this.lowpassFilter = null;
       this.distortionNode = null;
-      this.lastRpm = 850;
-      this.realSoundBuffer = null;
-      this.activeRealSource = null;
-      this.isRealSoundLoading = false;
+      this.lastRpm = 860;
+      this.currentRpm = 860;
+      this.targetRpm = 860;
 
       // Start vehicle dynamics & transmission physics loop immediately
       this.startEngineLoop();
-
-      // Preload real Porsche engine start audio
-      this.preloadRealSound();
-    }
-
-    async preloadRealSound() {
-      if (this.isRealSoundLoading || this.realSoundBuffer) return;
-      this.isRealSoundLoading = true;
-      try {
-        const response = await fetch('assets/porsche_engine_start.mp3');
-        if (!response.ok) return;
-        const arrayBuffer = await response.arrayBuffer();
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!this.ctx && AudioCtx) {
-          this.ctx = new AudioCtx();
-        }
-        if (this.ctx) {
-          this.realSoundBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-        }
-      } catch (err) {
-        // Fallback gracefully to HTML audio element if decoding fails or is deferred
-      } finally {
-        this.isRealSoundLoading = false;
-      }
     }
 
     init() {
@@ -241,103 +216,55 @@
       return curve;
     }
 
-    playRealEngineStart(boostVolume = 1.7) {
-      if (!this.masterGain) this.init();
-      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
-
-      // Cancel any currently playing start audio
-      this.stopRealEngineStart();
-
-      if (this.ctx && this.realSoundBuffer) {
-        try {
-          const source = this.ctx.createBufferSource();
-          source.buffer = this.realSoundBuffer;
-
-          // Louder amplifier gain as requested
-          const gainNode = this.ctx.createGain();
-          gainNode.gain.setValueAtTime(boostVolume, this.ctx.currentTime);
-
-          // Punchy compressor to prevent digital clipping while boosting perceived volume
-          const compressor = this.ctx.createDynamicsCompressor();
-          compressor.threshold.setValueAtTime(-4, this.ctx.currentTime);
-          compressor.knee.setValueAtTime(10, this.ctx.currentTime);
-          compressor.ratio.setValueAtTime(5, this.ctx.currentTime);
-          compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
-          compressor.release.setValueAtTime(0.2, this.ctx.currentTime);
-
-          source.connect(gainNode);
-          gainNode.connect(compressor);
-          compressor.connect(this.ctx.destination);
-
-          source.start(0);
-          this.activeRealSource = source;
-
-          source.onended = () => {
-            if (this.activeRealSource === source) {
-              this.activeRealSource = null;
-            }
-          };
-          return;
-        } catch (e) {
-          // Fall through to HTML Audio element fallback
-        }
-      }
-
-      // Fallback: HTML Audio Element
-      const sfxEl = document.getElementById('porsche-engine-sfx');
-      if (sfxEl) {
-        sfxEl.volume = 1.0;
-        sfxEl.currentTime = 0;
-        const playPromise = sfxEl.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(() => {});
-        }
-      }
-    }
-
-    stopRealEngineStart() {
-      if (this.activeRealSource) {
-        try {
-          this.activeRealSource.stop();
-        } catch (e) {}
-        this.activeRealSource = null;
-      }
-      const sfxEl = document.getElementById('porsche-engine-sfx');
-      if (sfxEl && !sfxEl.paused) {
-        sfxEl.pause();
-        sfxEl.currentTime = 0;
-      }
-    }
-
-    startEngineSequence() {
-      // 1. Play real Porsche flat-6 startup sound (amplified & crisp)
-      this.playRealEngineStart(1.75);
-
-      // 2. Initialize Web Audio engine synth
-      if (!this.masterGain) this.init();
-      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
-
-      if (this.masterGain) {
+    startIdleLoop() {
+      // 1. Ensure any Web Audio oscillator synthesis is completely silent - NO double sound!
+      if (this.masterGain && this.ctx) {
         this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
         this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
       }
 
-      // 3. Tachometer ignition flare & idle hand-off
-      this.targetRpm = 1800;
-      setTimeout(() => {
-        this.targetRpm = 4400; // Throttle flare
-        setTimeout(() => {
-          this.targetRpm = 850;  // Return to idle
-          if (STATE.soundEnabled) {
-            this.masterGain.gain.linearRampToValueAtTime(0.38, this.ctx.currentTime + 0.25);
-          }
-        }, 650);
-      }, 420);
+      // 2. Play Option A (porsche_gt3rs_idle.wav) in a clean, seamless infinite loop
+      const sfxEl = document.getElementById('porsche-engine-sfx');
+      if (sfxEl) {
+        sfxEl.loop = true;
+        sfxEl.volume = 1.0;
+        sfxEl.currentTime = 0;
+        const playPromise = sfxEl.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('Audio play restricted by browser:', err);
+          });
+        }
+      }
+
+      this.currentRpm = 860;
+      this.targetRpm = 860;
+    }
+
+    stopIdleLoop() {
+      // Stop Option A idle audio immediately
+      const sfxEl = document.getElementById('porsche-engine-sfx');
+      if (sfxEl) {
+        sfxEl.pause();
+        sfxEl.currentTime = 0;
+      }
+      if (this.masterGain && this.ctx) {
+        this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      }
+    }
+
+    startEngineSequence() {
+      this.startIdleLoop();
     }
 
     setVolume(vol, duration = 0.3) {
       if (vol === 0) {
-        this.stopRealEngineStart();
+        const sfxEl = document.getElementById('porsche-engine-sfx');
+        if (sfxEl && !STATE.soundEnabled) {
+          sfxEl.pause();
+          sfxEl.currentTime = 0;
+        }
       }
       if (!this.ctx || !this.masterGain) return;
       this.masterGain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + duration);
@@ -394,6 +321,12 @@
       if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
+      // Temporarily duck idle audio while revving
+      const sfxEl = document.getElementById('porsche-engine-sfx');
+      if (sfxEl && !sfxEl.paused) {
+        sfxEl.pause();
+      }
+
       this.currentGear = 'N';
       this.currentSpeed = 0;
       if (this.onShift) this.onShift('N');
@@ -402,15 +335,18 @@
       this.targetRpm = targetRpm;
 
       setTimeout(() => {
-        this.targetRpm = 850;
+        this.targetRpm = 860;
         // Overrun pops on drop
         setTimeout(() => this.playExhaustPop(), 250);
         setTimeout(() => this.playExhaustPop(), 420);
         setTimeout(() => this.playExhaustPop(), 620);
 
         setTimeout(() => {
-          if (!STATE.soundEnabled) {
-            this.setVolume(0, 0.5);
+          this.setVolume(0, 0.4);
+          // Resume Option A idle loop if sound is enabled
+          if (STATE.soundEnabled && sfxEl) {
+            sfxEl.loop = true;
+            sfxEl.play().catch(() => {});
           }
         }, revDuration * 1000);
       }, 500);
@@ -422,7 +358,14 @@
       if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
+      const sfxEl = document.getElementById('porsche-engine-sfx');
+
       if (isHolding) {
+        // Duck Option A idle audio while accelerating through gears
+        if (sfxEl && !sfxEl.paused) {
+          sfxEl.pause();
+        }
+
         this.setVolume(0.32, 0.08);
 
         // If in Neutral, engage 1st gear
@@ -433,7 +376,7 @@
         }
       } else {
         // Throttle released: begin smooth return to idle
-        this.targetRpm = 850;
+        this.targetRpm = 860;
         this.isShifting = false;
 
         // Overrun deceleration crackles
@@ -442,8 +385,13 @@
         setTimeout(() => this.playExhaustPop(), 540);
 
         setTimeout(() => {
-          if (!STATE.soundEnabled) this.setVolume(0, 0.5);
-        }, 1300);
+          this.setVolume(0, 0.4);
+          // Resume Option A idle loop if sound is enabled
+          if (STATE.soundEnabled && sfxEl) {
+            sfxEl.loop = true;
+            sfxEl.play().catch(() => {});
+          }
+        }, 1100);
       }
     }
 
@@ -2298,20 +2246,13 @@
       const toggleSound = () => {
         STATE.soundEnabled = !STATE.soundEnabled;
         if (STATE.soundEnabled) {
-          soundEngine.startEngineSequence();
+          soundEngine.startIdleLoop();
           soundBtn.classList.add('active');
-          triggerAudioToast('\u26A1 PORSCHE FLAT-6 // IGNITING...');
+          triggerAudioToast('\u26A1 FLAT-6 IDLE ONLINE // 860 RPM');
         } else {
-          // Mute Web Audio synth
-          soundEngine.setVolume(0, 0.4);
-          // Also stop/fade the real-sound MP3 if still playing
-          const sfxEl = document.getElementById('porsche-engine-sfx');
-          if (sfxEl && !sfxEl.paused) {
-            sfxEl.pause();
-            sfxEl.currentTime = 0;
-          }
+          soundEngine.stopIdleLoop();
           soundBtn.classList.remove('active');
-          triggerAudioToast('AUDIO ENGINE MUTED');
+          triggerAudioToast('AUDIO MUTED');
         }
       };
 
@@ -2325,8 +2266,10 @@
       if (heroRevBtn) heroRevBtn.addEventListener('click', triggerRev);
       if (engineListenBtn) {
         engineListenBtn.addEventListener('click', () => {
-          soundEngine.startEngineSequence();
-          triggerAudioToast('IGNITING FLAT-SIX...');
+          STATE.soundEnabled = true;
+          soundBtn.classList.add('active');
+          soundEngine.startIdleLoop();
+          triggerAudioToast('\u26A1 FLAT-6 IDLE ONLINE // 860 RPM');
         });
       }
       if (mobileSoundBtn) mobileSoundBtn.addEventListener('click', triggerRev);
