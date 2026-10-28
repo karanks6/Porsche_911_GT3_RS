@@ -120,16 +120,45 @@
       this.lowpassFilter = null;
       this.distortionNode = null;
       this.lastRpm = 850;
+      this.realSoundBuffer = null;
+      this.activeRealSource = null;
+      this.isRealSoundLoading = false;
 
       // Start vehicle dynamics & transmission physics loop immediately
       this.startEngineLoop();
+
+      // Preload real Porsche engine start audio
+      this.preloadRealSound();
+    }
+
+    async preloadRealSound() {
+      if (this.isRealSoundLoading || this.realSoundBuffer) return;
+      this.isRealSoundLoading = true;
+      try {
+        const response = await fetch('assets/porsche_engine_start.mp3');
+        if (!response.ok) return;
+        const arrayBuffer = await response.arrayBuffer();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!this.ctx && AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
+        if (this.ctx) {
+          this.realSoundBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+        }
+      } catch (err) {
+        // Fallback gracefully to HTML audio element if decoding fails or is deferred
+      } finally {
+        this.isRealSoundLoading = false;
+      }
     }
 
     init() {
-      if (this.ctx) return;
+      if (this.masterGain) return;
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      this.ctx = new AudioContext();
+      if (!this.ctx && AudioContext) {
+        this.ctx = new AudioContext();
+      }
+      if (!this.ctx) return;
 
       // Master Gain
       this.masterGain = this.ctx.createGain();
@@ -138,7 +167,7 @@
 
       // Main Engine Level
       this.engineGain = this.ctx.createGain();
-      this.engineGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+      this.engineGain.gain.setValueAtTime(0.28, this.ctx.currentTime);
 
       // Lowpass Tracking Filter (opens with throttle)
       this.lowpassFilter = this.ctx.createBiquadFilter();
@@ -212,38 +241,104 @@
       return curve;
     }
 
-    startEngineSequence() {
-      if (!this.ctx) this.init();
+    playRealEngineStart(boostVolume = 1.7) {
+      if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
-      this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      // Cancel any currently playing start audio
+      this.stopRealEngineStart();
 
-      // Starter motor sound
-      const starterOsc = this.ctx.createOscillator();
-      const starterGain = this.ctx.createGain();
-      starterOsc.type = 'sawtooth';
-      starterOsc.frequency.setValueAtTime(130, this.ctx.currentTime);
-      starterOsc.frequency.linearRampToValueAtTime(260, this.ctx.currentTime + 0.4);
-      starterGain.gain.setValueAtTime(0.14, this.ctx.currentTime);
-      starterGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.48);
+      if (this.ctx && this.realSoundBuffer) {
+        try {
+          const source = this.ctx.createBufferSource();
+          source.buffer = this.realSoundBuffer;
 
-      starterOsc.connect(starterGain);
-      starterGain.connect(this.ctx.destination);
-      starterOsc.start();
-      starterOsc.stop(this.ctx.currentTime + 0.5);
+          // Louder amplifier gain as requested
+          const gainNode = this.ctx.createGain();
+          gainNode.gain.setValueAtTime(boostVolume, this.ctx.currentTime);
 
-      // Ignition catch flare
+          // Punchy compressor to prevent digital clipping while boosting perceived volume
+          const compressor = this.ctx.createDynamicsCompressor();
+          compressor.threshold.setValueAtTime(-4, this.ctx.currentTime);
+          compressor.knee.setValueAtTime(10, this.ctx.currentTime);
+          compressor.ratio.setValueAtTime(5, this.ctx.currentTime);
+          compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+          compressor.release.setValueAtTime(0.2, this.ctx.currentTime);
+
+          source.connect(gainNode);
+          gainNode.connect(compressor);
+          compressor.connect(this.ctx.destination);
+
+          source.start(0);
+          this.activeRealSource = source;
+
+          source.onended = () => {
+            if (this.activeRealSource === source) {
+              this.activeRealSource = null;
+            }
+          };
+          return;
+        } catch (e) {
+          // Fall through to HTML Audio element fallback
+        }
+      }
+
+      // Fallback: HTML Audio Element
+      const sfxEl = document.getElementById('porsche-engine-sfx');
+      if (sfxEl) {
+        sfxEl.volume = 1.0;
+        sfxEl.currentTime = 0;
+        const playPromise = sfxEl.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {});
+        }
+      }
+    }
+
+    stopRealEngineStart() {
+      if (this.activeRealSource) {
+        try {
+          this.activeRealSource.stop();
+        } catch (e) {}
+        this.activeRealSource = null;
+      }
+      const sfxEl = document.getElementById('porsche-engine-sfx');
+      if (sfxEl && !sfxEl.paused) {
+        sfxEl.pause();
+        sfxEl.currentTime = 0;
+      }
+    }
+
+    startEngineSequence() {
+      // 1. Play real Porsche flat-6 startup sound (amplified & crisp)
+      this.playRealEngineStart(1.75);
+
+      // 2. Initialize Web Audio engine synth
+      if (!this.masterGain) this.init();
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+
+      if (this.masterGain) {
+        this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      }
+
+      // 3. Tachometer ignition flare & idle hand-off
+      this.targetRpm = 1800;
       setTimeout(() => {
-        this.masterGain.gain.linearRampToValueAtTime(0.24, this.ctx.currentTime + 0.1);
-        this.targetRpm = 3800; // Ignition throttle blip
+        this.targetRpm = 4400; // Throttle flare
         setTimeout(() => {
-          this.targetRpm = 850;
-        }, 400);
-      }, 440);
+          this.targetRpm = 850;  // Return to idle
+          if (STATE.soundEnabled) {
+            this.masterGain.gain.linearRampToValueAtTime(0.38, this.ctx.currentTime + 0.25);
+          }
+        }, 650);
+      }, 420);
     }
 
     setVolume(vol, duration = 0.3) {
+      if (vol === 0) {
+        this.stopRealEngineStart();
+      }
       if (!this.ctx || !this.masterGain) return;
       this.masterGain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + duration);
     }
@@ -296,7 +391,7 @@
 
     // Stationary rev in Neutral (e.g. REV FLAT-6 button)
     revEngine(targetRpm = 8900, revDuration = 1.3) {
-      if (!this.ctx) this.init();
+      if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
       this.currentGear = 'N';
@@ -324,7 +419,7 @@
     // Interactive Full-Throttle Acceleration Run through 7-Speed PDK
     holdThrottle(isHolding) {
       this.isHoldingThrottle = isHolding;
-      if (!this.ctx) this.init();
+      if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
       if (isHolding) {
@@ -2205,9 +2300,16 @@
         if (STATE.soundEnabled) {
           soundEngine.startEngineSequence();
           soundBtn.classList.add('active');
-          triggerAudioToast('FLAT-6 STARTED // 9000 RPM READY');
+          triggerAudioToast('\u26A1 PORSCHE FLAT-6 // IGNITING...');
         } else {
+          // Mute Web Audio synth
           soundEngine.setVolume(0, 0.4);
+          // Also stop/fade the real-sound MP3 if still playing
+          const sfxEl = document.getElementById('porsche-engine-sfx');
+          if (sfxEl && !sfxEl.paused) {
+            sfxEl.pause();
+            sfxEl.currentTime = 0;
+          }
           soundBtn.classList.remove('active');
           triggerAudioToast('AUDIO ENGINE MUTED');
         }
