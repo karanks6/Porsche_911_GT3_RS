@@ -720,10 +720,32 @@
                 child.castShadow = true;
                 child.receiveShadow = true;
 
+                const nodeName = child.name || '';
+                const nodeLower = nodeName.toLowerCase();
+                const isBadge = nodeLower.includes('badge') || nodeLower.includes('crest') || nodeLower.includes('emblem') || nodeLower.includes('logo') || nodeLower.includes('hoodbadge');
+
                 if (child.material) {
                   const matName = (child.material.name || '').toLowerCase();
 
-                  if (matName.includes('carpaint') || matName.includes('paint') || matName.includes('body')) {
+                  if (isBadge) {
+                    // Isolate Porsche crest and GT3 RS badges: clone material to decouple from shared texture atlas
+                    // Prevent headlight emissive lightbulb blowout and preserve authentic crest texture colors
+                    child.material = child.material.clone();
+                    if (child.material.color) {
+                      child.material.color.set(0xFFFFFF);
+                    }
+                    if (child.material.emissive) {
+                      child.material.emissive.set(0x000000);
+                      child.material.emissiveIntensity = 0.0;
+                    }
+                    child.material.metalness = 0.85;
+                    child.material.roughness = 0.20;
+                    if (child.material.clearcoat !== undefined) {
+                      child.material.clearcoat = 1.0;
+                      child.material.clearcoatRoughness = 0.04;
+                    }
+                    child.material.needsUpdate = true;
+                  } else if (matName.includes('carpaint') || matName.includes('paint') || matName.includes('body')) {
                     if (!matName.includes('black') && !matName.includes('plastic') && !matName.includes('rubber') && !matName.includes('trim') && !matName.includes('fabric')) {
                       this.paintMaterials.push(child.material);
                       child.material.color.set(CONFIG.carColor);
@@ -741,7 +763,7 @@
                     child.material.metalness = 0.12;
                     child.material.depthWrite = false;
                     child.material.side = THREE.DoubleSide;
-                  } else if (matName.includes('headlight') || matName.includes('led')) {
+                  } else if ((matName.includes('led_lights') || matName.includes('headlight_high')) && !matName.includes('headlight_1')) {
                     if (child.material.emissive) {
                       child.material.emissive.set(0xE0F0FF);
                       child.material.emissiveIntensity = 2.4;
@@ -763,7 +785,6 @@
                 }
 
                 // Identify wing and wheels
-                const nodeName = child.name || '';
                 if (nodeName.includes('Wing') || nodeName.includes('spoiler')) {
                   if (!this.wingFlap) this.wingFlap = child;
                 }
