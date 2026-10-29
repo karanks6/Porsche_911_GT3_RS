@@ -20,7 +20,7 @@
       { id: '01', name: 'OVERVIEW', sub: 'EXPLORE 3D CHASSIS', camPos: { x: 3.4, y: 1.3, z: 4.2 }, lookAt: { x: -0.6, y: 0.42, z: 0 }, carRot: 0 },
       { id: '02', name: 'PERFORMANCE', sub: '518 HP / 296 KM/H', camPos: { x: 3.8, y: 0.75, z: 1.6 }, lookAt: { x: 0, y: 0.35, z: 0.2 }, carRot: 0.5 },
       { id: '03', name: 'AERODYNAMICS', sub: '860 KG DOWNFORCE & DRS', camPos: { x: 2.8, y: 1.85, z: -2.8 }, lookAt: { x: 0, y: 0.75, z: -1.2 }, carRot: 2.3 },
-      { id: '04', name: 'INTERIOR', sub: 'WEISSACH CLUBSPORT COCKPIT', camPos: { x: -0.18, y: 1.04, z: -0.12 }, lookAt: { x: 0.34, y: 0.82, z: 0.24 }, carRot: 0.0 },
+      { id: '04', name: 'INTERIOR', sub: 'WEISSACH CLUBSPORT COCKPIT', camPos: { x: -0.16, y: 1.05, z: -0.28 }, lookAt: { x: 0.33, y: 0.92, z: 0.24 }, carRot: 0.0 },
       { id: '05', name: 'ENGINEERING', sub: 'FLAT-SIX 4.0L POWERTRAIN', camPos: { x: 1.2, y: 1.65, z: -2.9 }, lookAt: { x: 0, y: 0.65, z: -1.65 }, carRot: Math.PI }
     ],
     hotspots: [
@@ -1907,7 +1907,7 @@
             { val: 'TITANIUM', lbl: 'BOLTED ROLL CAGE' },
             { val: 'RACE-TEX', lbl: 'MICROFIBRE TRIM' }
           ],
-          cam: { camPos: { x: -0.18, y: 1.22, z: -0.16 }, lookAt: { x: 0.34, y: 1.02, z: 0.24 } },
+          cam: { camPos: { x: -0.16, y: 1.05, z: -0.28 }, lookAt: { x: 0.33, y: 0.92, z: 0.24 } },
           rot: 0.0
         },
         engineering: {
