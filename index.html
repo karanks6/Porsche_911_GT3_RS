@@ -25,7 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 
   <!-- Vercel Web Analytics -->
   <script>
@@ -785,23 +785,35 @@
             <span class="tab-index">04</span>
             <span class="tab-label">MOTORSPORT TELEMETRY</span>
           </button>
+          <button class="exp-tab exp-reset-btn" id="exp-reset-camera-btn" data-explorer-tab="reset" role="tab" aria-selected="false" title="Reset 3D Camera & Rotation to Default View">
+            <span class="tab-index">05</span>
+            <span class="tab-label">RESET CAMERA VIEW</span>
+            <svg class="reset-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </button>
         </div>
 
         <!-- Interactive 3D Model Showcase Area (Direct 3D Interaction Stage) -->
         <div class="explorer-interactive-stage" id="explorer-stage" aria-label="Interactive 3D vehicle stage">
+          <!-- Visual 3D Frame Corner Accents -->
+          <div class="stage-corner top-left"></div>
+          <div class="stage-corner top-right"></div>
+          <div class="stage-corner bottom-left"></div>
+          <div class="stage-corner bottom-right"></div>
+        </div>
+
+        <!-- Stage Interaction Hint (Placed cleanly outside the 3D frame) -->
+        <div class="stage-hint-wrapper">
           <div class="stage-overlay-hint">
             <span class="stage-drag-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2v20M2 12h20M19 9l3 3-3 3M5 9l-3 3 3 3M9 5l3-3 3 3M9 19l3 3 3-3"/>
               </svg>
             </span>
-            <span class="stage-hint-text">INTERACTIVE 3D STAGE // DRAG TO ROTATE 360° </span>
+            <span class="stage-hint-text">INTERACTIVE 3D STAGE // DRAG TO ROTATE 360°</span>
           </div>
-          <!-- Visual 3D Frame Corner Accents -->
-          <div class="stage-corner top-left"></div>
-          <div class="stage-corner top-right"></div>
-          <div class="stage-corner bottom-left"></div>
-          <div class="stage-corner bottom-right"></div>
         </div>
 
         <!-- Dynamic Explorer Content Panel -->
@@ -1281,7 +1293,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 
   <!-- Main Application Script -->
-  <script src="script.js?v=13"></script>
+  <script src="script.js?v=14"></script>
 
 </body>
 </html>

@@ -1873,8 +1873,8 @@
             { val: '0.39 CD', lbl: 'DRAG COEFFICIENT' },
             { val: '1,450 KG', lbl: 'DIN KERB WEIGHT' }
           ],
-          cam: { camPos: { x: 3.8, y: 1.5, z: 2.8 }, lookAt: { x: 0, y: 0.65, z: 0 } },
-          rot: 0.3
+          cam: { camPos: { x: 3.6, y: 1.35, z: 3.0 }, lookAt: { x: 0, y: 0.45, z: 0 } },
+          rot: 0.35
         },
         interior: {
           tag: 'MOTORSPORT COCKPIT',
@@ -1919,6 +1919,65 @@
 
       tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
+          const key = tab.getAttribute('data-explorer-tab');
+
+          if (key === 'reset') {
+            // 1. Smoothly reset 3D camera position, lookAt target, and car rotation to default hero angle
+            const defaultCam = { camPos: { x: 3.6, y: 1.35, z: 3.0 }, lookAt: { x: 0, y: 0.45, z: 0 } };
+            this.engine.transitionCameraTo(defaultCam, 1.2);
+            gsap.to(this.engine, { targetRotationY: 0.35, duration: 1.2, ease: 'power2.out' });
+            gsap.to(this.engine, { targetPitch: 0, duration: 1.2, ease: 'power2.out' });
+
+            // 2. Reset zoom FOV if user used wheel zoom
+            if (this.engine.camera && this.engine.camera.fov !== CONFIG.cameraFov) {
+              gsap.to(this.engine.camera, {
+                fov: CONFIG.cameraFov,
+                duration: 1.2,
+                ease: 'power2.out',
+                onUpdate: () => this.engine.camera.updateProjectionMatrix()
+              });
+            }
+
+            // 3. Momentary click glow on reset button
+            tab.classList.add('reset-active');
+            setTimeout(() => tab.classList.remove('reset-active'), 500);
+
+            // 4. Return active tab selection to 01 EXTERIOR & AERO
+            tabs.forEach((t) => {
+              t.classList.remove('active');
+              t.setAttribute('aria-selected', 'false');
+            });
+            const extTab = document.querySelector('.exp-tab[data-explorer-tab="exterior"]');
+            if (extTab) {
+              extTab.classList.add('active');
+              extTab.setAttribute('aria-selected', 'true');
+            }
+
+            // 5. Restore exterior specifications panel
+            const data = explorerData.exterior;
+            if (data) {
+              categoryTag.textContent = data.tag;
+              heading.textContent = data.title;
+              desc.textContent = data.desc;
+              specsContainer.innerHTML = data.specs.map((s) => `
+                <div class="exp-spec-col">
+                  <span class="val">${s.val}</span>
+                  <span class="lbl">${s.lbl}</span>
+                </div>
+              `).join('');
+            }
+
+            // 6. Visual status toast
+            const toast = document.getElementById('audio-toast');
+            if (toast) {
+              toast.querySelector('.audio-text').textContent = '⚡ 3D CAMERA VIEW RESET';
+              toast.classList.add('show');
+              setTimeout(() => toast.classList.remove('show'), 2200);
+            }
+            return;
+          }
+
+          // Normal subsystem tabs (01-04)
           tabs.forEach((t) => {
             t.classList.remove('active');
             t.setAttribute('aria-selected', 'false');
@@ -1926,7 +1985,6 @@
           tab.classList.add('active');
           tab.setAttribute('aria-selected', 'true');
 
-          const key = tab.getAttribute('data-explorer-tab');
           const data = explorerData[key];
           if (!data) return;
 

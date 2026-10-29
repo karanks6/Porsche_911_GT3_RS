@@ -2158,21 +2158,28 @@ body.is-dragging-3d {
   position: relative;
   width: 100%;
   max-width: 1100px;
-  height: 52vh;
-  min-height: 420px;
-  margin: 16px auto 36px auto;
+  height: 72vh;
+  min-height: 560px;
+  max-height: 740px;
+  margin: 16px auto 16px auto;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 6px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 20px;
   pointer-events: none;
   background: radial-gradient(ellipse at center, rgba(213, 0, 28, 0.05) 0%, transparent 72%);
 }
 
-.stage-overlay-hint {
+/* Stage Interaction Hint Wrapper (Outside 3D Frame) */
+.stage-hint-wrapper {
   display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 16px auto 36px auto;
+  pointer-events: none;
+}
+
+.stage-overlay-hint {
+  display: inline-flex;
   align-items: center;
   gap: 10px;
   background: rgba(10, 10, 14, 0.88);
@@ -2180,7 +2187,7 @@ body.is-dragging-3d {
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-left: 3px solid var(--color-guards-red);
-  padding: 8px 18px;
+  padding: 8px 20px;
   border-radius: 30px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   pointer-events: none;
@@ -2252,6 +2259,7 @@ body.is-dragging-3d {
   border-radius: 2px;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
+  cursor: pointer;
 }
 
 .exp-tab .tab-index {
@@ -2271,6 +2279,31 @@ body.is-dragging-3d {
   background: rgba(213, 0, 28, 0.15);
   border-color: var(--color-guards-red);
   color: var(--text-primary);
+}
+
+/* 5th Tab: Reset Camera View */
+.exp-reset-btn {
+  border-color: rgba(255, 255, 255, 0.16);
+  position: relative;
+}
+
+.exp-reset-btn .reset-icon {
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  stroke: var(--color-guards-red);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.exp-reset-btn:hover .reset-icon,
+.exp-reset-btn.reset-active .reset-icon {
+  transform: rotate(-180deg);
+}
+
+.exp-reset-btn.reset-active {
+  background: rgba(213, 0, 28, 0.3);
+  border-color: var(--color-guards-red);
+  color: #FFFFFF;
 }
 
 .explorer-display-panel {
