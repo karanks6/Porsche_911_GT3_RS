@@ -1873,7 +1873,7 @@
             { val: '0.39 CD', lbl: 'DRAG COEFFICIENT' },
             { val: '1,450 KG', lbl: 'DIN KERB WEIGHT' }
           ],
-          cam: { camPos: { x: 3.6, y: 1.35, z: 3.0 }, lookAt: { x: 0, y: 0.45, z: 0 } },
+          cam: { camPos: { x: 4.4, y: 1.55, z: 3.65 }, lookAt: { x: -0.32, y: 0.54, z: 0.05 } },
           rot: 0.35
         },
         interior: {
@@ -1886,7 +1886,7 @@
             { val: 'TITANIUM', lbl: 'BOLTED ROLL CAGE' },
             { val: 'RACE-TEX', lbl: 'MICROFIBRE TRIM' }
           ],
-          cam: { camPos: { x: -0.18, y: 1.10, z: -0.16 }, lookAt: { x: 0.34, y: 0.90, z: 0.24 } },
+          cam: { camPos: { x: -0.18, y: 1.22, z: -0.16 }, lookAt: { x: 0.34, y: 1.02, z: 0.24 } },
           rot: 0.0
         },
         engineering: {
@@ -1899,7 +1899,7 @@
             { val: 'PCCB', lbl: 'CERAMIC BRAKES' },
             { val: 'FORGED', lbl: 'MAGNESIUM WHEELS' }
           ],
-          cam: { camPos: { x: 2.1, y: 0.55, z: 1.2 }, lookAt: { x: 0.85, y: 0.35, z: 1.2 } },
+          cam: { camPos: { x: 2.35, y: 0.75, z: 1.35 }, lookAt: { x: 0.85, y: 0.52, z: 1.2 } },
           rot: 0.0
         },
         technology: {
@@ -1912,7 +1912,7 @@
             { val: 'DRS', lbl: 'HYDRAULIC ACTUATOR' },
             { val: '1.65 G', lbl: 'LATERAL GRIP' }
           ],
-          cam: { camPos: { x: 1.8, y: 1.6, z: 3.4 }, lookAt: { x: 0, y: 0.45, z: 0 } },
+          cam: { camPos: { x: 2.1, y: 1.85, z: 4.1 }, lookAt: { x: 0, y: 0.65, z: 0 } },
           rot: 0.4
         }
       };
@@ -1923,7 +1923,7 @@
 
           if (key === 'reset') {
             // 1. Smoothly reset 3D camera position, lookAt target, and car rotation to default hero angle
-            const defaultCam = { camPos: { x: 3.6, y: 1.35, z: 3.0 }, lookAt: { x: 0, y: 0.45, z: 0 } };
+            const defaultCam = { camPos: { x: 4.4, y: 1.55, z: 3.65 }, lookAt: { x: -0.32, y: 0.54, z: 0.05 } };
             this.engine.transitionCameraTo(defaultCam, 1.2);
             gsap.to(this.engine, { targetRotationY: 0.35, duration: 1.2, ease: 'power2.out' });
             gsap.to(this.engine, { targetPitch: 0, duration: 1.2, ease: 'power2.out' });
@@ -2031,7 +2031,7 @@
         { trigger: '#performance', cam: CONFIG.states[1], rot: 0.65 },
         { trigger: '#aerodynamics', cam: CONFIG.states[2], rot: 2.2 },
         { trigger: '#engine', cam: CONFIG.states[4], rot: Math.PI },
-        { trigger: '#explorer', cam: { camPos: { x: 3.6, y: 1.3, z: 3.2 }, lookAt: { x: 0, y: 0.45, z: 0 } }, rot: 0.35 },
+        { trigger: '#explorer', cam: { camPos: { x: 4.4, y: 1.55, z: 3.65 }, lookAt: { x: -0.32, y: 0.54, z: 0.05 } }, rot: 0.35 },
         { trigger: '#cockpit', cam: CONFIG.states[3], rot: 0.0 },
         { trigger: '#specs', cam: { camPos: { x: -3.6, y: 1.2, z: 2.4 }, lookAt: { x: 0, y: 0.45, z: 0 } }, rot: -0.6 }
       ];
@@ -2339,6 +2339,7 @@
    * -------------------------------------------------------------------------- */
   window.addEventListener('DOMContentLoaded', () => {
     const sceneEngine = new ThreeSceneEngine();
+    window.__sceneEngine = sceneEngine;
     new UIController(sceneEngine);
 
     const loaderScreen = document.getElementById('loading-screen');
