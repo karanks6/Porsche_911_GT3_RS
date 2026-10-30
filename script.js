@@ -118,13 +118,22 @@
       this.intakeFilter = null;
       this.exhaustFilter = null;
       this.lowpassFilter = null;
-      this.distortionNode = null;
       this.lastRpm = 860;
       this.currentRpm = 860;
       this.targetRpm = 860;
+      this.releaseTimers = [];
+      this.throttlePressTime = 0;
+      this.blipEndTime = 0;
 
       // Start vehicle dynamics & transmission physics loop immediately
       this.startEngineLoop();
+    }
+
+    clearReleaseTimers() {
+      if (this.releaseTimers && this.releaseTimers.length) {
+        this.releaseTimers.forEach((t) => clearTimeout(t));
+        this.releaseTimers = [];
+      }
     }
 
     init() {
@@ -259,6 +268,16 @@
     }
 
     setVolume(vol, duration = 0.3) {
+      if (!this.ctx || !this.masterGain) return;
+      const now = this.ctx.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+      if (duration > 0) {
+        this.masterGain.gain.linearRampToValueAtTime(vol, now + duration);
+      } else {
+        this.masterGain.gain.setValueAtTime(vol, now);
+      }
+
       if (vol === 0) {
         const sfxEl = document.getElementById('porsche-engine-sfx');
         if (sfxEl && !STATE.soundEnabled) {
@@ -266,8 +285,6 @@
           sfxEl.currentTime = 0;
         }
       }
-      if (!this.ctx || !this.masterGain) return;
-      this.masterGain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + duration);
     }
 
     updateAudioParams(rpm = this.currentRpm, duration = 0.05) {
@@ -318,6 +335,7 @@
 
     // Stationary rev in Neutral (e.g. REV FLAT-6 button)
     revEngine(targetRpm = 8900, revDuration = 1.3) {
+      this.clearReleaseTimers();
       if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
@@ -331,42 +349,51 @@
       this.currentSpeed = 0;
       if (this.onShift) this.onShift('N');
 
-      this.setVolume(0.28, 0.1);
+      this.setVolume(0.32, 0.06);
       this.targetRpm = targetRpm;
 
-      setTimeout(() => {
+      const t1 = setTimeout(() => {
+        if (this.isHoldingThrottle) return;
         this.targetRpm = 860;
         // Overrun pops on drop
-        setTimeout(() => this.playExhaustPop(), 250);
-        setTimeout(() => this.playExhaustPop(), 420);
-        setTimeout(() => this.playExhaustPop(), 620);
+        this.releaseTimers.push(setTimeout(() => { if (!this.isHoldingThrottle) this.playExhaustPop(); }, 250));
+        this.releaseTimers.push(setTimeout(() => { if (!this.isHoldingThrottle) this.playExhaustPop(); }, 420));
+        this.releaseTimers.push(setTimeout(() => { if (!this.isHoldingThrottle) this.playExhaustPop(); }, 620));
 
-        setTimeout(() => {
-          this.setVolume(0, 0.4);
+        const t2 = setTimeout(() => {
+          if (this.isHoldingThrottle) return;
+          this.setVolume(0, 0.35);
           // Resume Option A idle loop if sound is enabled
           if (STATE.soundEnabled && sfxEl) {
             sfxEl.loop = true;
             sfxEl.play().catch(() => {});
           }
         }, revDuration * 1000);
+        this.releaseTimers.push(t2);
       }, 500);
+      this.releaseTimers.push(t1);
     }
 
     // Interactive Full-Throttle Acceleration Run through 7-Speed PDK
     holdThrottle(isHolding) {
-      this.isHoldingThrottle = isHolding;
       if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
 
       const sfxEl = document.getElementById('porsche-engine-sfx');
 
       if (isHolding) {
+        // Cancel all pending release and fadeout timers immediately
+        this.clearReleaseTimers();
+        this.isHoldingThrottle = true;
+        this.throttlePressTime = performance.now();
+
         // Duck Option A idle audio while accelerating through gears
         if (sfxEl && !sfxEl.paused) {
           sfxEl.pause();
         }
 
-        this.setVolume(0.32, 0.08);
+        // Set Web Audio volume immediately (never mute when user presses/clicks)
+        this.setVolume(0.32, 0.05);
 
         // If in Neutral, engage 1st gear
         if (this.currentGear === 'N') {
@@ -374,24 +401,44 @@
           this.pdkRatioIndex = 0;
           if (this.onShift) this.onShift('1');
         }
+
+        // Rapid click / tap blip response:
+        // Surge RPM immediately so rapid clicks create aggressive throttle blips
+        if (this.currentRpm < 2600) {
+          this.targetRpm = Math.max(this.targetRpm, 4800);
+        } else {
+          // Additional rapid clicks surge RPM further towards redline
+          this.targetRpm = Math.min(9050, this.targetRpm + 1800);
+        }
       } else {
-        // Throttle released: begin smooth return to idle
-        this.targetRpm = 860;
+        const holdDuration = performance.now() - (this.throttlePressTime || 0);
+        this.isHoldingThrottle = false;
         this.isShifting = false;
 
-        // Overrun deceleration crackles
-        setTimeout(() => this.playExhaustPop(), 180);
-        setTimeout(() => this.playExhaustPop(), 360);
-        setTimeout(() => this.playExhaustPop(), 540);
+        // If it was a quick click/tap (< 260ms), sustain the blip peak briefly so the engine audibly roars
+        if (holdDuration < 260) {
+          this.blipEndTime = performance.now() + 280;
+        } else {
+          this.blipEndTime = 0;
+          this.targetRpm = 860;
+        }
 
-        setTimeout(() => {
-          this.setVolume(0, 0.4);
+        // Overrun deceleration crackles
+        this.releaseTimers.push(setTimeout(() => { if (!this.isHoldingThrottle) this.playExhaustPop(); }, 180));
+        this.releaseTimers.push(setTimeout(() => { if (!this.isHoldingThrottle) this.playExhaustPop(); }, 360));
+        this.releaseTimers.push(setTimeout(() => { if (!this.isHoldingThrottle) this.playExhaustPop(); }, 540));
+
+        // Smooth fade out to idle
+        const fadeTimer = setTimeout(() => {
+          if (this.isHoldingThrottle) return; // Never mute if user is pressing throttle again!
+          this.setVolume(0, 0.35);
           // Resume Option A idle loop if sound is enabled
           if (STATE.soundEnabled && sfxEl) {
             sfxEl.loop = true;
             sfxEl.play().catch(() => {});
           }
         }, 1100);
+        this.releaseTimers.push(fadeTimer);
       }
     }
 
@@ -457,7 +504,9 @@
           }
         } else {
           // THROTTLE RELEASED: Engine Braking & Sequential Downshift
-          this.targetRpm = 850;
+          if (now > (this.blipEndTime || 0)) {
+            this.targetRpm = 850;
+          }
           this.isShifting = false;
 
           if (this.currentSpeed > 0) {
@@ -1854,24 +1903,33 @@
 
       // Support BOTH Click and Press & Hold for throttle acceleration
       if (revBtn) {
-        // Pointer down: Rev up & hold through PDK gears
-        const pressHandler = (e) => {
-          e.preventDefault();
+        let isHolding = false;
+        const startThrottle = (e) => {
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          if (isHolding) return;
+          isHolding = true;
           soundEngine.holdThrottle(true);
           revBtn.classList.add('holding');
         };
 
-        // Pointer up: Release throttle
-        const releaseHandler = (e) => {
-          e.preventDefault();
+        const stopThrottle = (e) => {
+          if (!isHolding) return;
+          isHolding = false;
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
           soundEngine.holdThrottle(false);
           revBtn.classList.remove('holding');
         };
 
-        revBtn.addEventListener('pointerdown', pressHandler);
-        window.addEventListener('pointerup', releaseHandler);
-        revBtn.addEventListener('touchstart', pressHandler, { passive: false });
-        window.addEventListener('touchend', releaseHandler);
+        revBtn.addEventListener('pointerdown', startThrottle);
+        window.addEventListener('pointerup', stopThrottle);
+        window.addEventListener('pointercancel', stopThrottle);
+        revBtn.addEventListener('contextmenu', (e) => e.preventDefault());
       }
     }
 
@@ -2361,6 +2419,7 @@
   window.addEventListener('DOMContentLoaded', () => {
     const sceneEngine = new ThreeSceneEngine();
     window.__sceneEngine = sceneEngine;
+    window.__soundEngine = soundEngine;
     new UIController(sceneEngine);
 
     const loaderScreen = document.getElementById('loading-screen');
