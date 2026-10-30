@@ -1671,7 +1671,7 @@ body.is-dragging-3d {
 
 .shift-lights {
   position: absolute;
-  top: 10px;
+  top: calc(10px - 0.5cm);
   display: flex;
   align-items: center;
   gap: 5px;
