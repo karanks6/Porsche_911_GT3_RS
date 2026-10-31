@@ -115,6 +115,9 @@
       this.oscillators = [];
       this.masterGain = null;
       this.engineGain = null;
+      this.bassFilter = null;
+      this.subBassFilter = null;
+      this.compressor = null;
       this.intakeFilter = null;
       this.exhaustFilter = null;
       this.lowpassFilter = null;
@@ -144,58 +147,83 @@
       }
       if (!this.ctx) return;
 
+      // Master Dynamics Compressor (prevents digital clipping, glues sub-bass)
+      this.compressor = this.ctx.createDynamicsCompressor();
+      this.compressor.threshold.setValueAtTime(-14, this.ctx.currentTime);
+      this.compressor.knee.setValueAtTime(10, this.ctx.currentTime);
+      this.compressor.ratio.setValueAtTime(4.5, this.ctx.currentTime);
+      this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+      this.compressor.release.setValueAtTime(0.09, this.ctx.currentTime);
+      this.compressor.connect(this.ctx.destination);
+
       // Master Gain
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
-      this.masterGain.connect(this.ctx.destination);
+      this.masterGain.connect(this.compressor);
 
       // Main Engine Level
       this.engineGain = this.ctx.createGain();
-      this.engineGain.gain.setValueAtTime(0.28, this.ctx.currentTime);
+      this.engineGain.gain.setValueAtTime(0.30, this.ctx.currentTime);
+
+      // Dedicated Deep Sub-Bass Filter (75 Hz boxer crank rumble)
+      this.subBassFilter = this.ctx.createBiquadFilter();
+      this.subBassFilter.type = 'peaking';
+      this.subBassFilter.frequency.setValueAtTime(75, this.ctx.currentTime);
+      this.subBassFilter.Q.setValueAtTime(1.5, this.ctx.currentTime);
+      this.subBassFilter.gain.setValueAtTime(9.0, this.ctx.currentTime);
+
+      // Powerful Low-Shelf Bass Booster (140 Hz intake & exhaust manifold pressure)
+      this.bassFilter = this.ctx.createBiquadFilter();
+      this.bassFilter.type = 'lowshelf';
+      this.bassFilter.frequency.setValueAtTime(140, this.ctx.currentTime);
+      this.bassFilter.gain.setValueAtTime(11.0, this.ctx.currentTime);
 
       // Lowpass Tracking Filter (opens with throttle)
       this.lowpassFilter = this.ctx.createBiquadFilter();
       this.lowpassFilter.type = 'lowpass';
       this.lowpassFilter.frequency.setValueAtTime(1200, this.ctx.currentTime);
-      this.lowpassFilter.Q.setValueAtTime(2.2, this.ctx.currentTime);
+      this.lowpassFilter.Q.setValueAtTime(1.8, this.ctx.currentTime);
 
       // Titanium Exhaust Resonator (2200 Hz high-pitch GT3 RS signature howl)
       this.exhaustFilter = this.ctx.createBiquadFilter();
       this.exhaustFilter.type = 'peaking';
       this.exhaustFilter.frequency.setValueAtTime(2200, this.ctx.currentTime);
       this.exhaustFilter.Q.setValueAtTime(3.8, this.ctx.currentTime);
-      this.exhaustFilter.gain.setValueAtTime(6.0, this.ctx.currentTime);
+      this.exhaustFilter.gain.setValueAtTime(5.0, this.ctx.currentTime);
 
       // Individual Throttle Body Intake Formant (820 Hz bark)
       this.intakeFilter = this.ctx.createBiquadFilter();
       this.intakeFilter.type = 'peaking';
       this.intakeFilter.frequency.setValueAtTime(820, this.ctx.currentTime);
       this.intakeFilter.Q.setValueAtTime(2.8, this.ctx.currentTime);
-      this.intakeFilter.gain.setValueAtTime(4.5, this.ctx.currentTime);
+      this.intakeFilter.gain.setValueAtTime(4.0, this.ctx.currentTime);
 
       // Waveshaper for exhaust rasp
       this.distortionNode = this.ctx.createWaveShaper();
-      this.distortionNode.curve = this.makeDistortionCurve(22);
+      this.distortionNode.curve = this.makeDistortionCurve(18);
       this.distortionNode.oversample = '4x';
 
       // Connect DSP chain
       this.lowpassFilter.connect(this.intakeFilter);
       this.intakeFilter.connect(this.exhaustFilter);
       this.exhaustFilter.connect(this.distortionNode);
-      this.distortionNode.connect(this.engineGain);
+      this.distortionNode.connect(this.subBassFilter);
+      this.subBassFilter.connect(this.bassFilter);
+      this.bassFilter.connect(this.engineGain);
       this.engineGain.connect(this.masterGain);
 
-      // 6 Horizontally-Opposed Cylinder Harmonics (3 firings per crankshaft rev)
+      // 7 Cylinder Harmonics & Crank Sub-Harmonics (tuned for deep Flat-6 boxer roar)
       const harmonics = [
-        { ratio: 1.0, type: 'sawtooth', gain: 0.35 }, // Base cylinder pulse (f0)
-        { ratio: 2.0, type: 'sawtooth', gain: 0.30 }, // 2nd harmonic (bank pulse)
+        { ratio: 0.5, type: 'triangle', gain: 0.85, directBass: true }, // Heavy crankshaft sub-bass rumble
+        { ratio: 1.0, type: 'sawtooth', gain: 0.65 }, // Primary cylinder firing pulse (f0)
+        { ratio: 1.5, type: 'sine',     gain: 0.45 }, // Boxer cross-bank sub-harmonic
+        { ratio: 2.0, type: 'sawtooth', gain: 0.32 }, // 2nd harmonic (bank pulse)
         { ratio: 3.0, type: 'triangle', gain: 0.22 }, // 3rd harmonic
-        { ratio: 4.0, type: 'sawtooth', gain: 0.18 }, // 4th harmonic
-        { ratio: 6.0, type: 'square',   gain: 0.12 }, // 6th harmonic (metallic 2700Hz wail)
-        { ratio: 0.5, type: 'sine',     gain: 0.40 }  // Crankshaft low rumble
+        { ratio: 4.0, type: 'sawtooth', gain: 0.16 }, // 4th harmonic
+        { ratio: 6.0, type: 'square',   gain: 0.10 }  // 6th harmonic (metallic 2700Hz wail)
       ];
 
-      harmonics.forEach(({ ratio, type, gain }) => {
+      harmonics.forEach(({ ratio, type, gain, directBass }) => {
         const osc = this.ctx.createOscillator();
         osc.type = type;
         osc.frequency.setValueAtTime(42.5 * ratio, this.ctx.currentTime);
@@ -204,7 +232,12 @@
         oscGain.gain.setValueAtTime(gain, this.ctx.currentTime);
 
         osc.connect(oscGain);
-        oscGain.connect(this.lowpassFilter);
+        if (directBass) {
+          // Direct connection to sub-bass filter avoids waveshaper distortion
+          oscGain.connect(this.subBassFilter);
+        } else {
+          oscGain.connect(this.lowpassFilter);
+        }
         osc.start();
 
         this.oscillators.push({ osc, ratio, oscGain, baseGain: gain });
@@ -291,11 +324,14 @@
       if (!this.ctx || !this.isPlaying || this.oscillators.length === 0) return;
       const baseFreq = (rpm / 60) * 3.0;
       const now = this.ctx.currentTime;
+      const throttleLoadBoost = this.isHoldingThrottle ? 1.75 : 1.0;
 
       this.oscillators.forEach(({ osc, ratio, oscGain, baseGain }) => {
         osc.frequency.setValueAtTime(Math.max(15, baseFreq * ratio), now);
         const rpmFactor = Math.pow(Math.min(9050, rpm) / 9000, 1.2);
-        oscGain.gain.setValueAtTime(baseGain * (0.6 + rpmFactor * 0.8), now);
+        // Under throttle load, boost low-end fundamentals significantly for heavy visceral bass
+        const bassMultiplier = ratio <= 1.5 ? throttleLoadBoost : 1.0;
+        oscGain.gain.setValueAtTime(baseGain * (0.6 + rpmFactor * 0.8) * bassMultiplier, now);
       });
 
       const filterCutoff = 1000 + (Math.min(9050, rpm) / 9000) * 7200;
@@ -309,7 +345,9 @@
 
     playExhaustPop() {
       if (!this.ctx || !this.isPlaying || this.masterGain.gain.value < 0.05) return;
-      // High-pressure combustion crackle in titanium headers
+      const now = this.ctx.currentTime;
+
+      // 1. High-pressure combustion crackle in titanium headers
       const bufferSize = this.ctx.sampleRate * 0.07;
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -331,6 +369,21 @@
       popFilter.connect(popGain);
       popGain.connect(this.masterGain);
       noise.start();
+
+      // 2. Heavy sub-bass exhaust thump (detonation pressure wave)
+      try {
+        const subOsc = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(115 + Math.random() * 30, now);
+        subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.09);
+        subGain.gain.setValueAtTime(0.50, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+        subOsc.connect(subGain);
+        subGain.connect(this.masterGain);
+        subOsc.start(now);
+        subOsc.stop(now + 0.09);
+      } catch (e) {}
     }
 
     // Stationary rev in Neutral (e.g. REV FLAT-6 button)
@@ -338,6 +391,19 @@
       this.clearReleaseTimers();
       if (!this.masterGain) this.init();
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+
+      if (this.bassFilter && this.ctx) {
+        const now = this.ctx.currentTime;
+        this.bassFilter.gain.cancelScheduledValues(now);
+        this.bassFilter.gain.setValueAtTime(this.bassFilter.gain.value, now);
+        this.bassFilter.gain.linearRampToValueAtTime(14.0, now + 0.05);
+      }
+      if (this.subBassFilter && this.ctx) {
+        const now = this.ctx.currentTime;
+        this.subBassFilter.gain.cancelScheduledValues(now);
+        this.subBassFilter.gain.setValueAtTime(this.subBassFilter.gain.value, now);
+        this.subBassFilter.gain.linearRampToValueAtTime(10.5, now + 0.05);
+      }
 
       // Temporarily duck idle audio while revving
       const sfxEl = document.getElementById('porsche-engine-sfx');
@@ -387,6 +453,20 @@
         this.isHoldingThrottle = true;
         this.throttlePressTime = performance.now();
 
+        // Massive bass boost on wide-open throttle (WOT load)
+        if (this.bassFilter && this.ctx) {
+          const now = this.ctx.currentTime;
+          this.bassFilter.gain.cancelScheduledValues(now);
+          this.bassFilter.gain.setValueAtTime(this.bassFilter.gain.value, now);
+          this.bassFilter.gain.linearRampToValueAtTime(15.0, now + 0.04);
+        }
+        if (this.subBassFilter && this.ctx) {
+          const now = this.ctx.currentTime;
+          this.subBassFilter.gain.cancelScheduledValues(now);
+          this.subBassFilter.gain.setValueAtTime(this.subBassFilter.gain.value, now);
+          this.subBassFilter.gain.linearRampToValueAtTime(12.0, now + 0.04);
+        }
+
         // Duck Option A idle audio while accelerating through gears
         if (sfxEl && !sfxEl.paused) {
           sfxEl.pause();
@@ -414,6 +494,20 @@
         const holdDuration = performance.now() - (this.throttlePressTime || 0);
         this.isHoldingThrottle = false;
         this.isShifting = false;
+
+        // Restore normal bass level on deceleration
+        if (this.bassFilter && this.ctx) {
+          const now = this.ctx.currentTime;
+          this.bassFilter.gain.cancelScheduledValues(now);
+          this.bassFilter.gain.setValueAtTime(this.bassFilter.gain.value, now);
+          this.bassFilter.gain.linearRampToValueAtTime(8.5, now + 0.3);
+        }
+        if (this.subBassFilter && this.ctx) {
+          const now = this.ctx.currentTime;
+          this.subBassFilter.gain.cancelScheduledValues(now);
+          this.subBassFilter.gain.setValueAtTime(this.subBassFilter.gain.value, now);
+          this.subBassFilter.gain.linearRampToValueAtTime(6.0, now + 0.3);
+        }
 
         // If it was a quick click/tap (< 260ms), sustain the blip peak briefly so the engine audibly roars
         if (holdDuration < 260) {
