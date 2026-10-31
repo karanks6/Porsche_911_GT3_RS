@@ -2791,6 +2791,83 @@ body.is-dragging-3d {
   color: var(--text-primary);
 }
 
+/* Connect & Developer Section */
+.connect-links {
+  gap: 15px !important;
+}
+
+.connect-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.connect-field-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+
+.dev-author-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-heading);
+  font-size: 13.5px !important;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #FFFFFF !important;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.dev-author-link .external-icon {
+  stroke: var(--color-guards-red);
+  opacity: 0.85;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.dev-author-link:hover {
+  color: var(--color-guards-red) !important;
+  transform: translateX(3px);
+}
+
+.dev-author-link:hover .external-icon {
+  opacity: 1;
+  transform: translate(2px, -2px);
+}
+
+.connect-meta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono) !important;
+  font-size: 11.5px !important;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary) !important;
+  word-break: break-all;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.connect-meta-link svg {
+  flex-shrink: 0;
+  stroke: var(--color-guards-red);
+  opacity: 0.85;
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.connect-meta-link:hover {
+  color: #FFFFFF !important;
+  transform: translateX(3px);
+}
+
+.connect-meta-link:hover svg {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
 .footer-bottom-bar {
   border-top: 1px solid var(--border-subtle);
   padding: 24px 36px;
